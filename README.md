@@ -126,7 +126,7 @@ Im Strategy Tester ist Telegram automatisch aus. Fehler stehen im Journal (`Tele
 
 1. **MT5 installieren:** Lade das MetaTrader-5-Terminal aus deinem FTMO-Kundenbereich herunter, installiere es auf dem VPS und melde dich mit den Zugangsdaten deines **Demo-/Free-Trial-Kontos** an.
 2. **EA kopieren:** Im Terminal *Datei → Datenordner öffnen*, dann `MomentumBurstEA.mq5` nach `MQL5\Experts\` kopieren.
-3. **Kompilieren:** MetaEditor öffnen (F4), die Datei öffnen und kompilieren (F7). Erwartet sind 0 Fehler. *Der Code wurde ohne MQL5-Compiler geschrieben. Melde Compiler-Fehler, und ich korrigiere sie.*
+3. **Kompilieren:** Der Workflow *Compile EA* (GitHub → Actions) kompiliert den EA bei jeder Änderung unter `mql5/` mit MetaEditor auf Windows und stellt `MomentumBurstEA.ex5` als Artefakt bereit. Entweder die `.ex5` von dort herunterladen und nach `MQL5\Experts\` legen, oder lokal in MetaEditor (F4) die `.mq5` öffnen und kompilieren (F7). Erwartet sind 0 Fehler.
 4. **Strategy Tester:** Vor dem Einsatz im Strategy Tester (Strg+R) laufen lassen.
    - Einstellungen: Modus *Every tick based on real ticks*, Zeitraum mindestens 2020–heute, Symbole US100.cash, XAUUSD, EURUSD.
    - Prüfen, dass Lotgrößen dem eingestellten Risiko entsprechen, dass keine Position ohne Stop-Loss existiert und dass die Tagesverlust-Sperre auslöst. Zum Testen der Sperre `InpDailyLossLimitPct` z. B. auf 0,5 setzen.
