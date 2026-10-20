@@ -1,0 +1,13 @@
+[project]
+name = "ftmo-momentum-burst"
+version = "0.1.0"
+description = "Momentum-burst research and MQL5 EA for FTMO accounts"
+requires-python = ">=3.11"
+dependencies = ["pandas>=2.2", "numpy>=1.26", "yfinance>=0.2.50"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["research/tests"]
+pythonpath = ["research"]
