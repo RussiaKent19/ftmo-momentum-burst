@@ -108,6 +108,20 @@ nicht erreichbar war. Prüfe auf ftmo.com bzw. in deinem Account:
 3. **Wochenende:** Ob Positionen übers Wochenende gehalten werden dürfen, hängt vom Kontotyp ab (Normal oder Swing). Der Standard ist konservativ: schließen. Der Backtest hat übers Wochenende gehalten.
 4. **FTMO-Konten sind simuliert:** Auch ein Funded Account kann sich als Demo melden, dann greift die Echtgeld-Sperre nicht. Ob du „funded“ handelst, entscheidest du selbst.
 
+## Telegram-Benachrichtigungen
+
+Der EA meldet per Telegram:
+- jeden Einstieg mit Symbol, Richtung, Lots, Preis und Stop
+- jede Schließung mit Grund (Stop-Loss, EA, manuell), P/L und Equity
+- das Auslösen der Tages- bzw. Gesamtverlust-Sperre
+
+Einrichten:
+1. MT5: *Extras → Optionen → Expert Advisors → „WebRequest für folgende URLs erlauben“* aktivieren und `https://api.telegram.org` eintragen.
+2. Beim Anhängen des EA `InpTelegramToken` (von @BotFather) und `InpTelegramChatId` setzen. Leer = aus.
+
+Der Token steht dann in den EA-Einstellungen auf dem VPS. Gib den VPS-Zugang nicht weiter.
+Im Strategy Tester ist Telegram automatisch aus. Fehler stehen im Journal (`Telegram failed`).
+
 ## Deployment auf dem Windows-VPS
 
 1. **MT5 installieren:** Lade das MetaTrader-5-Terminal aus deinem FTMO-Kundenbereich herunter, installiere es auf dem VPS und melde dich mit den Zugangsdaten deines **Demo-/Free-Trial-Kontos** an.

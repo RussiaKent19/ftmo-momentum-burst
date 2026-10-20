@@ -1,4 +1,4 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //| MomentumBurstEA.mq5                                              |
 //| FTMO risk guard with a replaceable entry signal.                 |
 //|                                                                  |
@@ -41,12 +41,51 @@ input int    InpHoldBars           = 5;     // Time exit after this many bars
 input bool   InpAllowShort         = true;
 input bool   InpSkipAfter3Runup    = true;  // Skip after 3 consecutive closes in signal direction
 
+//--- Telegram trade notifications. Add https://api.telegram.org under
+//--- Tools > Options > Expert Advisors > "Allow WebRequest for listed URL".
+input group "Telegram"
+input string InpTelegramToken      = "";    // Bot token from @BotFather (empty = off)
+input string InpTelegramChatId     = "";    // Chat ID that receives the messages
+
 input group "Misc"
 input long   InpMagic              = 20261020;
 
 CTrade   trade;
 datetime g_lastBar = 0;
 string   g_gvPrefix;
+
+//+------------------------------------------------------------------+
+//| Telegram                                                         |
+//+------------------------------------------------------------------+
+string UrlEncode(const string text)
+{
+   uchar bytes[];
+   int n = StringToCharArray(text, bytes, 0, WHOLE_ARRAY, CP_UTF8) - 1;  // drop terminating zero
+   string out = "";
+   for(int i = 0; i < n; i++)
+   {
+      uchar b = bytes[i];
+      if((b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9') || b == '-' || b == '_' || b == '.' || b == '~')
+         out += CharToString(b);
+      else
+         out += StringFormat("%%%02X", b);
+   }
+   return out;
+}
+
+void Notify(const string text)
+{
+   if(InpTelegramToken == "" || InpTelegramChatId == "" || MQLInfoInteger(MQL_TESTER))
+      return;
+   string url = "https://api.telegram.org/bot" + InpTelegramToken + "/sendMessage";
+   string body = "chat_id=" + UrlEncode(InpTelegramChatId) + "&text=" + UrlEncode(text);
+   char data[], result[];
+   string headers;
+   StringToCharArray(body, data, 0, StringLen(body));  // body is pure ASCII after encoding
+   int code = WebRequest("POST", url, "Content-Type: application/x-www-form-urlencoded\r\n", 5000, data, result, headers);
+   if(code != 200)
+      PrintFormat("Telegram failed: HTTP %d, error %d (is https://api.telegram.org allowed for WebRequest?)", code, GetLastError());
+}
 
 //+------------------------------------------------------------------+
 //| Persistent state shared by all instances on this account         |
@@ -157,6 +196,7 @@ bool GuardOk()
    {
       CloseAllOwn("max loss limit reached");
       GvSet("maxblocked", 1);
+      Notify(StringFormat("⛔ Max-Verlustgrenze erreicht. Alle EA-Positionen geschlossen, EA dauerhaft gestoppt. Equity %.2f", equity));
       Alert("MomentumBurstEA: max loss limit reached. EA stopped permanently. Delete GlobalVariable ",
             g_gvPrefix, "maxblocked to re-enable.");
       return false;
@@ -169,6 +209,7 @@ bool GuardOk()
    {
       CloseAllOwn("daily loss limit reached");
       GvSet("dayblocked", 1);
+      Notify(StringFormat("⚠️ Tagesverlustgrenze erreicht. Alle EA-Positionen geschlossen, Pause bis morgen. Equity %.2f", equity));
       return false;
    }
    return true;
@@ -363,6 +404,39 @@ int OnInit()
    PrintFormat("MomentumBurstEA on %s: initial balance %.2f, daily floor %.2f, max floor %.2f",
                _Symbol, InitialBalance(), DailyFloor(), MaxFloor());
    return INIT_SUCCEEDED;
+}
+
+// One message per EA deal. Every instance sees every deal, so each reports only its own symbol.
+void OnTradeTransaction(const MqlTradeTransaction &trans, const MqlTradeRequest &request, const MqlTradeResult &result)
+{
+   if(trans.type != TRADE_TRANSACTION_DEAL_ADD || !HistoryDealSelect(trans.deal))
+      return;
+   if(HistoryDealGetInteger(trans.deal, DEAL_MAGIC) != InpMagic || HistoryDealGetString(trans.deal, DEAL_SYMBOL) != _Symbol)
+      return;
+
+   int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
+   string side = HistoryDealGetInteger(trans.deal, DEAL_TYPE) == DEAL_TYPE_BUY ? "BUY" : "SELL";
+   double vol = HistoryDealGetDouble(trans.deal, DEAL_VOLUME);
+   double price = HistoryDealGetDouble(trans.deal, DEAL_PRICE);
+   long entry = HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
+
+   if(entry == DEAL_ENTRY_IN)
+   {
+      double sl = PositionSelectByTicket(HistoryDealGetInteger(trans.deal, DEAL_POSITION_ID)) ? PositionGetDouble(POSITION_SL) : 0;
+      Notify(StringFormat("🟢 %s %s %.2f Lot @ %s | SL %s", _Symbol, side, vol,
+                          DoubleToString(price, digits), DoubleToString(sl, digits)));
+   }
+   else if(entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_OUT_BY)
+   {
+      double pnl = HistoryDealGetDouble(trans.deal, DEAL_PROFIT) + HistoryDealGetDouble(trans.deal, DEAL_SWAP)
+                 + HistoryDealGetDouble(trans.deal, DEAL_COMMISSION);
+      long reason = HistoryDealGetInteger(trans.deal, DEAL_REASON);
+      string why = reason == DEAL_REASON_SL ? "Stop-Loss" : reason == DEAL_REASON_TP ? "Take-Profit"
+                 : reason == DEAL_REASON_EXPERT ? "EA" : reason == DEAL_REASON_SO ? "Stop-Out" : "manuell/sonstig";
+      Notify(StringFormat("%s %s geschlossen (%s) %.2f Lot @ %s | P/L %.2f %s | Equity %.2f",
+                          pnl >= 0 ? "✅" : "🔴", _Symbol, why, vol, DoubleToString(price, digits),
+                          pnl, AccountInfoString(ACCOUNT_CURRENCY), AccountInfoDouble(ACCOUNT_EQUITY)));
+   }
 }
 
 void OnTick()
