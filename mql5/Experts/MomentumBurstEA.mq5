@@ -22,6 +22,14 @@ input bool   InpCloseBeforeWeekend = true;  // Close positions on Friday and pau
 input int    InpFridayCloseHour    = 21;    // Friday close hour (server time)
 input bool   InpAllowRealAccount   = false; // Allow trading on real-money accounts
 
+//--- News and political risk (MT5 economic calendar; not available in the Strategy Tester)
+input group "News / political risk"
+input bool     InpNewsFilter         = true; // Block entries around high-impact events of the symbol's currencies
+input int      InpNewsBlockBeforeMin = 30;   // Minutes before an event without new entries
+input int      InpNewsBlockAfterMin  = 30;   // Minutes after an event without new entries
+input int      InpNewsFlatBeforeMin  = 0;    // Close this symbol's positions this many minutes before an event (0 = off)
+input datetime InpPauseUntil         = 0;    // No new entries until this server time (manual pause, e.g. elections)
+
 //--- Example signal: momentum burst (see research/backtest.py)
 input group "Signal: momentum burst"
 input ENUM_TIMEFRAMES InpSignalTF  = PERIOD_D1;
@@ -166,6 +174,39 @@ bool GuardOk()
    return true;
 }
 
+// True if a high-importance calendar event for the symbol's base or profit currency
+// falls between afterMin minutes ago and beforeMin minutes from now.
+bool HighImpactEventWithin(const int beforeMin, const int afterMin)
+{
+   datetime now = TimeTradeServer();
+   string ccys[2];
+   ccys[0] = SymbolInfoString(_Symbol, SYMBOL_CURRENCY_BASE);
+   ccys[1] = SymbolInfoString(_Symbol, SYMBOL_CURRENCY_PROFIT);
+   for(int c = 0; c < 2; c++)
+   {
+      if(c == 1 && ccys[1] == ccys[0])
+         break;
+      MqlCalendarValue values[];
+      if(!CalendarValueHistory(values, now - afterMin * 60, now + beforeMin * 60, NULL, ccys[c]))
+         continue;
+      for(int i = 0; i < ArraySize(values); i++)
+      {
+         MqlCalendarEvent ev;
+         if(CalendarEventById(values[i].event_id, ev) && ev.importance == CALENDAR_IMPORTANCE_HIGH)
+            return true;
+      }
+   }
+   return false;
+}
+
+void CloseOwnOnSymbol(const string reason)
+{
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+      if(SelectOwn(i) && PositionGetString(POSITION_SYMBOL) == _Symbol)
+         if(!trade.PositionClose((ulong)PositionGetInteger(POSITION_TICKET)))
+            PrintFormat("%s: close failed (%s): %d", _Symbol, reason, trade.ResultRetcode());
+}
+
 bool IsWeekendWindow()
 {
    if(!InpCloseBeforeWeekend)
@@ -240,6 +281,13 @@ void TryEnter()
 {
    if(CountOwn(_Symbol) > 0 || CountOwn() >= InpMaxOpenPositions || IsWeekendWindow())
       return;
+   if(InpPauseUntil > 0 && TimeCurrent() < InpPauseUntil)
+      return;
+   if(InpNewsFilter && HighImpactEventWithin(InpNewsBlockBeforeMin, InpNewsBlockAfterMin))
+   {
+      PrintFormat("%s: entry check skipped, high-impact event nearby", _Symbol);
+      return;
+   }
 
    double stop = 0;
    int side = GetSignal(stop);
@@ -330,6 +378,14 @@ void OnTick()
    }
 
    ManageExits();
+
+   static datetime lastNewsCheck = 0;
+   if(InpNewsFilter && InpNewsFlatBeforeMin > 0 && TimeCurrent() - lastNewsCheck >= 60 && CountOwn(_Symbol) > 0)
+   {
+      lastNewsCheck = TimeCurrent();
+      if(HighImpactEventWithin(InpNewsFlatBeforeMin, 0))
+         CloseOwnOnSymbol("high-impact event ahead");
+   }
 
    datetime bar = iTime(_Symbol, InpSignalTF, 0);
    if(bar == 0 || bar == g_lastBar)

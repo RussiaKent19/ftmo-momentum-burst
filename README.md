@@ -90,6 +90,13 @@ Magic Number. Den Zustand speichert der EA in Terminal-Globalvariablen
 | `InpMaxLossLimitPct` | 8,0 | Puffer unter FTMOs 10 % |
 | `InpMaxOpenPositions` | 3 | Über alle Symbole |
 | `InpCloseBeforeWeekend` | true | Siehe Annahmen unten |
+| `InpNewsFilter` | true | Keine Einstiege ±30 min um High-Impact-Termine der Symbolwährungen (Basis- und Gegenwährung) |
+| `InpNewsFlatBeforeMin` | 0 | > 0: Positionen des Symbols so viele Minuten vor einem Termin schließen. Für FTMO mindestens 5, damit das Schließen nicht selbst ins 2-Minuten-Fenster fällt. |
+| `InpPauseUntil` | 0 | Manueller Stopp für neue Einstiege bis zu dieser Serverzeit, z. B. vor Wahlen oder bei Eskalationen aus dem Briefing |
+
+Der News-Filter nutzt den eingebauten MT5-Wirtschaftskalender. **Im Strategy
+Tester liefert der Kalender keine Daten**, dort ist der Filter also wirkungslos.
+Prüfe ihn auf dem Demokonto im Journal (`high-impact event nearby`).
 
 **Annahmen, die du prüfen musst**
 
@@ -97,7 +104,7 @@ Die FTMO-Regeln stammen aus Drittquellen, weil ftmo.com bei der Entwicklung
 nicht erreichbar war. Prüfe auf ftmo.com bzw. in deinem Account:
 
 1. **Zeitpunkt des Tagesresets:** FTMO setzt um Mitternacht CE(S)T zurück, der EA am Mitternachtswechsel der **Serverzeit**. Weichen beide ab, verschiebt sich der Tagesstart. Der Puffer von 1 % fängt das in der Regel ab.
-2. **News:** Auf FTMO-Konten mit Normal-Regeln ist der Handel rund um wichtige News eingeschränkt. **Der EA hat keinen News-Filter.** Einstiege erfolgen beim Tageswechsel, Stops können aber jederzeit ausgelöst werden.
+2. **News:** Auf FTMO-Konten mit Normal-Regeln ist der Handel rund um wichtige News eingeschränkt. Der News-Filter (siehe unten) blockiert Einstiege um High-Impact-Termine und kann vorher flat gehen. Er kennt aber nur **geplante** Termine aus dem MT5-Kalender. Unerwartete politische Ereignisse (Tweets, Angriffe, überraschende Sanktionen) erkennt er nicht; dafür gibt es `InpPauseUntil` und das tägliche Briefing.
 3. **Wochenende:** Ob Positionen übers Wochenende gehalten werden dürfen, hängt vom Kontotyp ab (Normal oder Swing). Der Standard ist konservativ: schließen. Der Backtest hat übers Wochenende gehalten.
 4. **FTMO-Konten sind simuliert:** Auch ein Funded Account kann sich als Demo melden, dann greift die Echtgeld-Sperre nicht. Ob du „funded“ handelst, entscheidest du selbst.
 
