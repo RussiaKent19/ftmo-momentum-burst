@@ -22,19 +22,25 @@ jobs:
           $editor = "C:\Program Files\MetaTrader 5\MetaEditor64.exe"
           for ($i = 0; $i -lt 120 -and -not (Test-Path $editor); $i++) { Start-Sleep 5 }
           if (-not (Test-Path $editor)) { throw "MetaEditor not installed after 10 minutes" }
-          Start-Sleep 20  # let the installer finish writing the standard library
+          Start-Sleep 20
           Get-Process terminal64, mt5setup -ErrorAction SilentlyContinue | Stop-Process -Force
+          # The standard library (MQL5\Include) is unpacked on the first terminal start;
+          # portable mode puts it next to the executable.
+          $mt5 = "C:\Program Files\MetaTrader 5"
+          Start-Process "$mt5\terminal64.exe" -ArgumentList "/portable"
+          $lib = "$mt5\MQL5\Include\Trade\Trade.mqh"
+          for ($i = 0; $i -lt 60 -and -not (Test-Path $lib); $i++) { Start-Sleep 5 }
+          Get-Process terminal64 -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (-not (Test-Path $lib)) { Get-ChildItem $mt5 -Recurse -Depth 2 | Select-Object -First 80 FullName; throw "Standard library not unpacked" }
 
       - name: Compile
         shell: pwsh
         run: |
-          $trade = Get-ChildItem "C:\Program Files\MetaTrader 5", "$env:APPDATA\MetaQuotes" -Recurse -Filter Trade.mqh -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $trade) { throw "Standard library (Trade.mqh) not found" }
-          $inc = $trade.Directory.Parent.Parent.FullName  # ...\MQL5
+          $inc = "C:\Program Files\MetaTrader 5\MQL5"
           $src = Join-Path $inc "Experts\MomentumBurstEA.mq5"
           Copy-Item mql5\Experts\MomentumBurstEA.mq5 $src -Force
           $log = Join-Path $env:RUNNER_TEMP "compile.log"
-          Start-Process "C:\Program Files\MetaTrader 5\MetaEditor64.exe" -ArgumentList "/compile:`"$src`"", "/inc:`"$inc`"", "/log:`"$log`"" -Wait
+          Start-Process "C:\Program Files\MetaTrader 5\MetaEditor64.exe" -ArgumentList "/portable", "/compile:`"$src`"", "/inc:`"$inc`"", "/log:`"$log`"" -Wait
           $text = Get-Content $log -Raw
           Write-Output $text
           if ($text -notmatch "Result:\s*0 errors") { throw "Compilation failed" }
